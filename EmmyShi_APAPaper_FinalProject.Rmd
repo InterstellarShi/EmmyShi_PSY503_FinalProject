@@ -1,0 +1,251 @@
+---
+title             : "Emmy Shi PSY503 Final Project: Re-Analysis of Cue Validity Effects Using Open Behavioral Data"
+shorttitle        : "Dec 12 - Cue Validity Effects Analysis"
+
+author: 
+  - name          : "Yujingai (Emmy) Shi"
+    affiliation   : "1"
+    corresponding : yes    # Define only one corresponding author
+    address       : "Princeton University, Department of Psychology"
+    email         : "es2277@princeton.edu"
+
+affiliation:
+  - id            : "1"
+    institution   : "Princeton University"
+
+abstract: |
+  This project re-analyzes open behavioral data from Schmitz et al. (2024) to examine whether cue validity influences reaction time using statistical methods learned in PSY503 such as ANOVA test, Regression test, and power analysis. Focusing on Experiment 1 data from the original paper, I reproduced key analyses comparing valid versus invalid cues and differences between arrow and gaze cues. The results revealed small validity effects and no significant interaction with cue type since the data size is limited and the design of the experiment leads to very simple performances. A simulation-based power analysis showed that very large samples would be required to reliably detect this effect. 
+
+  
+keywords          : "statistics, eyetracking, attention tests, psychophysics"
+
+bibliography      : "r-references.bib"
+
+floatsintext      : no
+linenumbers       : yes
+draft             : no
+mask              : no
+
+figurelist        : no
+tablelist         : no
+footnotelist      : no
+
+classoption       : "man"
+output            : papaja::apa6_pdf
+---
+
+```{r setup, include = FALSE}
+library("papaja")
+r_refs("r-references.bib")
+```
+
+```{r analysis-preferences}
+# Seed for random number generation
+set.seed(42)
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+```
+
+# Introduction
+Selective attention is a fundamental skills for helping people direct their attention to various positions in a dynamic and complex environment. In laboratory settings, Attentional cueing paradigms are widely used to study how people orient their attention in visual environments. There are many classic findings by using attentional cueing paradigms or gabor patch paradigms show that people's responses are faster when a cue correctly predicts the location of a target; This is an example of demonstrating a robust “validity effect.”
+
+The dataset analyzed in this project comes from Experiment 1 of this openly available study comparing gaze cues and arrow cues. I only selected Experiment 1 data since there are various different experiments conducted in this study; these experiments are layered in a complex form, so I only selected experiment 1 to show a clean and straightforward analysis. The goal of the present analysis was not to fully replicate the original paper, but instead to reproduce core analyses to examine attention effects, examine basic patterns in reaction time data, and estimate the statistical power required to detect the observed effects. This analysis provided an opportunity for me to apply the statistical tools learned in class to real behavioral data, and through these analysis, I have developed clearer understanding on a study's robustness and power.
+
+
+# Method
+Below I am listing the Experiment 1 set up and procedure, and the data analysis pipeline I used to examine the attentional effects and the power tests. 
+## Procedure
+Experiment 1 used a spatial cueing paradigm; each trial began with either an eye-gaze cue (a face whose eyes shifted left or right) or an arrow cue pointing in one direction. After a brief cue–target interval, a target letter appeared on either the left or right side of the display, and participants responded by pressing a key to record. On valid trials the cue correctly indicated the target location; on invalid trials it pointed in the opposite direction. Reaction time and accuracy were recorded on every trial. All data for Experiment 1 were publicly available through the OSF repository associated with the original article.
+## Data analysis
+In this project, I re-analyzed Experiment 1 using the statistical tools learned in PSY503. The primary analyses focused on computing the classic validity effect (valid vs. invalid trials) and testing whether this effect differed between gaze cues and arrow cues through ANOVA and Regression tests. I also conducted supplementary analyses, including visualization of reaction time and accuracy performance, and a simulation-based power analysis to assess the sample size required to detect the observed effect sizes.
+
+# Results
+The dataset is saved in the project repo under **data/Exp1_RT.RDS**.
+Using a **relative path** ensures complete reproducibility.
+```{r}
+library(tidyverse)
+
+```
+
+```{r load_data}
+dat_raw <- readRDS("data/Exp1_RT.RDS")
+head(dat_raw)
+```
+Next, I followed standard preprocessing used in attentional cueing experiments:
+1. keep only test trials
+2. remove extreme reaction times (<150 ms or >2000 ms)
+3. use valid2 (TRUE/FALSE) as the correct validity coding
+4. convert categorical variables to factors
+
+And we can see that we have 3830 valid trials where cue predicted the target and 3829 invalid trials where cue misled the target, so this means the project has balanced trials, which is good for further analysis. 
+```{r}
+# Clean dataset for analysis
+dat <- dat_raw %>%
+  # 1. Keep only test trials
+  filter(train == "test") %>%
+  
+  # 2. Remove extreme RTs
+  filter(RT > 150, RT < 2000) %>%
+  
+  # 3. Recode key variables
+  mutate(
+    cueType = factor(cueType),
+    valid   = factor(valid2, levels = c(TRUE, FALSE),labels = c("valid", "invalid")),VP = factor(VP)
+  )
+
+# Inspect cleaned dataset
+glimpse(dat)
+table(dat$valid)
+summary(dat$RT)
+```
+
+Descriptive Statistics: to compute descriptive statistics by cuetype and validity
+Before the main analyses, we could compute **summary statistics** for each condition (cue type × validity). This helps check whether the expected validity effect appears in both cue types. For each condition,I computed the mean RT(reaction time), standard deviation, sample size, and the standard error of the mean (SEM).
+```{r}
+dat_summary <- dat %>%
+  filter(!is.na(valid)) %>% 
+  group_by(cueType, valid) %>%
+  summarise(mean_RT = mean(RT),sd_RT = sd(RT),n = n(),se_RT = sd_RT / sqrt(n),.groups = "drop")
+
+dat_summary
+```
+The table displays the mean reaction time, standard deviation, sample size (n), and standard error (SE) for each combination of cue type (arrow vs face) and cue validity (valid vs invalid). 
+**We could tell that people recognize face cues are overall faster than arrow cues, which is normal here**
+
+Below is the visualization for the descriptive data
+```{r}
+ggplot(dat_summary,
+       aes(x = valid, y = mean_RT, fill = cueType)) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  geom_errorbar(
+    aes(ymin = mean_RT - se_RT,ymax = mean_RT + se_RT),
+    width = 0.15,
+    position = position_dodge(width = 0.8)
+  ) +
+  labs(
+    title = "Mean Reaction Time by Cue Type and Validity",x = "Cue Validity",y = "Mean RT (ms)",fill = "Cue Type") +
+  theme_minimal(base_size = 14)
+```
+This plot shows mean reaction times for valid versus invalid cues,for arrow cues and face(gaze) cues.Face cues produce overall faster reaction times than arrow cues, and valid trials are faster than invalid trials.
+
+**2 *2 ANOVA on Reaction Time**
+Now I want to specifically know that 1)Are reaction times faster on valid versus invalid trials?, and 2) Does the size of the validity effect differ for arrow versus face cues? So I have a 2x2 ANOVA. I fit a two-way ANOVA predicting RT from cue type (arrow vsface), cue validity (valid vs invalid), and their interaction.Only trials with clear validity labels (valid/invalid) are included here.
+```{r}
+anova_model <- aov(RT ~ cueType * valid, data = dat)
+summary(anova_model)
+```
+From the ANOVA test, there is a significant main effect of cue type (F= 21.647, p < .001); responses to face cues were slightly faster than to arrow cues and this is statistically significant. In addition, there is a  significant main effect of validity (F= 10.66, p = .0011); Participants responded faster on valid trials than invalid trials, **replicating the classic attentional validity effect**. Finally, there is a non-significant cueType and validity interaction
+
+**Effect Size**
+I also calculated the eta squred to reflect the proportion of variance in RT explained by each effect while controlling for others. This is just a complementary measure here. 
+```{r}
+library(effectsize)
+eta_squared(anova_model)
+
+```
+Although the partial eta-squared values are small (< .01), this pattern is typical for reaction time data, where variability is influenced by many cognitive and motor processes.I think that small effect sizes do not indicate a problem with the analysis;rather, they reflect that the experimental manipulations account for a modest portion of RT variance. Finally, this is consistent with what is commonly observed in attention research.
+
+```{r}
+dat_acc <- dat %>%
+filter(!is.na(valid))
+```
+
+Now I have calculated the accuray for the different cue types and validty status. Next, I am going to perform analysis on accuracy.
+```{r}
+acc_summary <- dat_acc %>%
+group_by(cueType, valid) %>%
+summarise(mean_acc = mean(correct),n = n(),se_acc = sqrt(mean_acc * (1 - mean_acc) / n),.groups = "drop")
+
+acc_summary
+```
+I calculated **accuracy performance across cue types and cue validity**. The purpose of this analysis is to confirm that participants performed the task well overall. I computed the proportion of correct responses for each combination of cueType (arrow vs. face) and valid (valid vs. invalid), along with standard errors.The following plot shows those information.
+```{r}
+library(scales)
+library(tidyverse) # Ensure this is loaded
+
+ggplot(acc_summary, aes(x = valid, y = mean_acc, fill = cueType)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_errorbar(aes(ymin = mean_acc - se_acc, ymax = mean_acc + se_acc),
+                width = 0.15, 
+                position = position_dodge(width = 0.8)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  coord_cartesian(ylim = c(0.5, 1.00)) + # Added zoom here
+  labs(title = "Accuracy by Cue Type and Validity",
+       x = "Cue Validity",
+       y = "Proportion correct",
+       fill = "Cue Type") +
+  theme_minimal(base_size = 14)
+```
+Accuracy was **uniformly very high** across all conditions (approximately 95–97%), with very small differences between cue types or validity conditions. Importantly, no systematic drop in accuracy was observed for invalid trials, suggesting that participants did not sacrifice accuracy to respond more quickly.
+
+Next, to statistically assess whether accuracy differed by cue type, cue validity, or their interaction, I have a binomial logistic regression. Logistic models are appropriate for binary outcomes here. The model included cueType, valid, and their interaction as predictors.
+```{r}
+acc_model <- glm(correct ~ cueType * valid,
+                 data = dat,
+                 family = binomial)
+
+summary(acc_model)
+```
+Consistent with the descriptive plot, the logistic regression revealed **no significant main effects of cue type or validity, and no interaction between them**. All predictors had p-values well above .40, indicating that neither cue type nor cue validity reliably influenced accuracy. This is very normal here; This confirms that accuracy remained stable across conditions and suggests that participants were equally capable of performing the task regardless of cue direction or other things. 
+
+**simulation-based power analysis**
+To evaluate how many participants would be required to reliably detect the validity effect, I conducted a simulation-based power analysis. I use empirical mean difference between valid and invalid trials, the observed variability (approximate 145 ms), and a moderate within-subject correlation, I simulated datasets of different sample sizes and tested each using a paired t-test.500 simulated experiments were run.
+```{r power_analysis, cache=TRUE}
+#parameters 
+mean_diff_validity <- 11.5  
+sd_rt <- 145  
+correlation <- 0.5
+#simulation functon
+simulate_power <- function(n_participants, reps = 500) {
+  sig_count <- 0
+  for(i in 1:reps) {
+    valid_scores <- rnorm(n_participants, mean = 0, sd = sd_rt)
+    error_term <- rnorm(n_participants, mean = 0, sd = sd_rt)
+    invalid_scores <- (correlation * valid_scores) + (sqrt(1 - correlation^2) * error_term) + mean_diff_validity
+    #a paired t-test 
+    test_result <- t.test(valid_scores, invalid_scores, paired = TRUE)
+    # Check if p <.05
+    if(test_result$p.value < 0.05) {
+      sig_count <- sig_count + 1
+    }
+  }
+  
+  #power
+  return(sig_count / reps)
+}
+
+#simulation across different Sample Sizes
+sample_sizes <- seq(50, 500, by = 50)
+power_results <- numeric(length(sample_sizes))
+# Loop through
+for(j in 1:length(sample_sizes)) {
+  power_results[j] <- simulate_power(sample_sizes[j])
+}
+power_data <- data.frame(sample_size = sample_sizes, power = power_results)
+ggplot(power_data, aes(x = sample_size, y = power)) +
+  geom_line(color = "#0072B2", linewidth = 1.2) +
+  geom_point(size = 3, color = "#0072B2") +
+  geom_hline(yintercept = 0.80, linetype = "dashed", color = "red") +
+  labs(title = "Power Curve for Validity Effect Replication",
+       subtitle = "Simulation based on observed means (Diff ~11.5ms, SD ~145ms)",
+       x = "Number of Participants",
+       y = "Statistical Power (1 - Beta)") +
+  scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
+  theme_minimal(base_size = 14)
+
+```
+The results of the simulated power analysis shows that detecting the validity effect observed in the present dataset would require a very large sample size. Power would probably exceed 50% until approximately 500 participants, suggesting that it would be difficult to detect in typical laboratory samples.
+
+
+# Discussion
+The re-analysis of Experiment 1 data bere reproduced the core validity effects typically observed in attentional cueing paradigms; that is people would respond faster when cue is validly pointing to the target. Although the effects were small and statistically weak, I believe people would observe a better effect size statistics in the other experiment. Reaction times were slightly faster on valid than invalid trials, but the difference was modest and did not significantly interact with cue type. 
+
+In contrast to the original paper, which had a much richer set of experiments and larger sample sizes, Experiment 1 alone provided limited evidence for strong attentional advantages, likely because the design was simple and individual differences were not modeled (People are doing extremely great on all trials).Therefore, from this perspective, **I succesffuly reproduced the attentional effect, but in weak form.** Overall, these results suggest that while the validity effect is present, it is not robust enough in this dataset to support broader theoretical conclusions without additional data.
+
+Then I did analysis to examine the statistical power required to detect the observed effects. The simulation-based power analysis used the empirically estimated effect size from the current dataset and repeatedly simulated experiments of varying sample sizes. These simulations showed that the effect of cue validity was very small relative to the trial-to-trial variability in reaction times. As a result, the model estimated that extremely large sample sizes (at least 500 participants)would be needed to achieve conventional levels of statistical power. This finding is consistent with the above analyses and emphasize that the present data are underpowered for detecting subtle attentional differences, especially interactions.
+
+These power results also shows that the experimental design might be improved to achieve stronger or more reliable effects. Increasing the number of participants is the most straightforward solution here (for instance, if the experiment 1 has 500 participants, it would lead to very promising results). I think there are potential other solutions that can be involved other than increasing the number of participants. For example, we could use more trials per condition, this would reduce within-participant variability. In summary, the results of the above analysis and the power simulations illustrate that while attentional cueing effects are theoretically robust, detecting them reliably would need adequate sample size.
+
+\newpage
+
+# References
+@schmitz2024gaze
