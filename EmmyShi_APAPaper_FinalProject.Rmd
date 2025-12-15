@@ -63,7 +63,10 @@ The dataset is saved in the project repo under **data/Exp1_RT.RDS**.
 Using a **relative path** ensures complete reproducibility.
 ```{r}
 library(tidyverse)
-
+library(papaja)
+library(afex)
+library(emmeans)
+library(effectsize)
 ```
 
 ```{r load_data}
@@ -112,18 +115,22 @@ The table displays the mean reaction time, standard deviation, sample size (n), 
 **We could tell that people recognize face cues are overall faster than arrow cues, which is normal here**
 
 Below is the visualization for the descriptive data
-```{r}
-ggplot(dat_summary,
-       aes(x = valid, y = mean_RT, fill = cueType)) +
-  geom_col(position = position_dodge(width = 0.8)) +
+
+```{r rt-plot, fig.cap = "Mean reaction times (ms) as a function of Cue Type and Validity. Error bars represent standard errors."}
+ggplot(dat_summary, aes(x = valid, y = mean_RT, fill = cueType)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
   geom_errorbar(
-    aes(ymin = mean_RT - se_RT,ymax = mean_RT + se_RT),
+    aes(ymin = mean_RT - se_RT, ymax = mean_RT + se_RT),
     width = 0.15,
     position = position_dodge(width = 0.8)
   ) +
   labs(
-    title = "Mean Reaction Time by Cue Type and Validity",x = "Cue Validity",y = "Mean RT (ms)",fill = "Cue Type") +
-  theme_minimal(base_size = 14)
+    x = "Cue Validity",
+    y = "Mean RT (ms)",
+    fill = "Cue Type"
+  ) +
+  theme_apa() +
+  scale_fill_grey() 
 ```
 This plot shows mean reaction times for valid versus invalid cues,for arrow cues and face(gaze) cues.Face cues produce overall faster reaction times than arrow cues, and valid trials are faster than invalid trials.
 
@@ -133,6 +140,7 @@ Now I want to specifically know that 1)Are reaction times faster on valid versus
 anova_model <- aov(RT ~ cueType * valid, data = dat)
 summary(anova_model)
 ```
+
 From the ANOVA test, there is a significant main effect of cue type (F= 21.647, p < .001); responses to face cues were slightly faster than to arrow cues and this is statistically significant. In addition, there is a  significant main effect of validity (F= 10.66, p = .0011); Participants responded faster on valid trials than invalid trials, **replicating the classic attentional validity effect**. Finally, there is a non-significant cueType and validity interaction
 
 **Effect Size**
@@ -158,9 +166,9 @@ summarise(mean_acc = mean(correct),n = n(),se_acc = sqrt(mean_acc * (1 - mean_ac
 acc_summary
 ```
 I calculated **accuracy performance across cue types and cue validity**. The purpose of this analysis is to confirm that participants performed the task well overall. I computed the proportion of correct responses for each combination of cueType (arrow vs. face) and valid (valid vs. invalid), along with standard errors.The following plot shows those information.
-```{r}
+```{r accuracy-plot, fig.cap = "Mean accuracy rates by cue type and validity. Error bars represent standard errors."}
 library(scales)
-library(tidyverse) # Ensure this is loaded
+library(tidyverse)
 
 ggplot(acc_summary, aes(x = valid, y = mean_acc, fill = cueType)) +
   geom_col(position = position_dodge(width = 0.8), width = 0.7) +
@@ -168,11 +176,12 @@ ggplot(acc_summary, aes(x = valid, y = mean_acc, fill = cueType)) +
                 width = 0.15, 
                 position = position_dodge(width = 0.8)) +
   scale_y_continuous(labels = percent_format(accuracy = 1)) +
-  coord_cartesian(ylim = c(0.5, 1.00)) + # Added zoom here
-  labs(title = "Accuracy by Cue Type and Validity",
-       x = "Cue Validity",
-       y = "Proportion correct",
-       fill = "Cue Type") +
+  coord_cartesian(ylim = c(0.5, 1.00)) + 
+  labs(
+    x = "Cue Validity",
+    y = "Proportion correct",
+    fill = "Cue Type"
+  ) +
   theme_minimal(base_size = 14)
 ```
 Accuracy was **uniformly very high** across all conditions (approximately 95–97%), with very small differences between cue types or validity conditions. Importantly, no systematic drop in accuracy was observed for invalid trials, suggesting that participants did not sacrifice accuracy to respond more quickly.
